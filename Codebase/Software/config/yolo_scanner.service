@@ -1,0 +1,14 @@
+[Unit]
+Description=YOLO Scanner — RPi Live Inference
+After=network.target
+
+[Service]
+WorkingDirectory=/home/pi/rpi_yolo_scanner
+ExecStart=/home/pi/rpi_yolo_scanner/venv/bin/python app/app.py
+Restart=on-failure
+RestartSec=5
+User=pi
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

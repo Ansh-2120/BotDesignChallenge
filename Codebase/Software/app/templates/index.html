@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>YOLO Scanner — Dual Camera</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:      #070b10;
+      --surface: #0d1520;
+      --surface2: #111c2a;
+      --border:  #1a2d42;
+      --green:   #00ff88;
+      --blue:    #00cfff;
+      --warn:    #ffcc00;
+      --orange:  #ff8c00;
+      --text:    #c8d6e5;
+      --muted:   #3a5570;
+      --red:     #ff4d6d;
+      --radius:  12px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Outfit', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--surface);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { width: 36px; height: 36px; border-radius: 9px; background: linear-gradient(135deg, var(--green), var(--blue)); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 12px; color: #000; }
+    .logo-text { font-size: 16px; font-weight: 800; }
+    .logo-text span { color: var(--green); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .status-pill { display: flex; align-items: center; gap: 7px; background: rgba(0,255,136,.08); border: 1px solid rgba(0,255,136,.2); border-radius: 20px; padding: 5px 14px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--green); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* Stopwatch */
+    .stopwatch-wrap { display: flex; align-items: center; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 14px; }
+    .sw-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .sw-display { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: var(--warn); min-width: 60px; text-align: center; letter-spacing: 3px; transition: color .3s; }
+    .sw-display.running { color: var(--green); }
+    .sw-btn { border: none; cursor: pointer; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; padding: 5px 11px; text-transform: uppercase; letter-spacing: 1px; transition: all .15s; }
+    .sw-start  { background: var(--green); color: #000; }
+    .sw-start:hover  { opacity: .85; }
+    .sw-pause  { background: var(--warn); color: #000; }
+    .sw-pause:hover  { opacity: .85; }
+    .sw-reset  { background: transparent; border: 1px solid var(--muted); color: var(--muted); }
+    .sw-reset:hover  { border-color: var(--red); color: var(--red); }
+
+    main { flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 18px 24px; }
+
+    .stats-strip { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; }
+    .stat-label { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+    .stat-val { font-size: 22px; font-weight: 800; line-height: 1; }
+
+    .cameras-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media(max-width:800px) { .cameras-row{grid-template-columns:1fr} .stats-strip{grid-template-columns:repeat(3,1fr)} }
+    .cam-panel { display: flex; flex-direction: column; gap: 8px; }
+    .cam-label { font-size: 10px; font-family: 'JetBrains Mono', monospace; letter-spacing: 2px; text-transform: uppercase; }
+    .cam-label.green { color: var(--green); }
+    .cam-label.blue  { color: var(--blue); }
+    .video-wrap { position: relative; background: #000; border-radius: var(--radius); overflow: hidden; aspect-ratio: 4/3; }
+    .video-wrap.green-border { border: 2px solid rgba(0,255,136,.35); }
+    .video-wrap.blue-border  { border: 2px solid rgba(0,207,255,.35); }
+    .video-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cam-badge { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; }
+    .badge { padding: 3px 8px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; }
+    .badge-live  { background: var(--red); color: #fff; }
+    .badge-green { background: rgba(0,255,136,.15); border: 1px solid var(--green); color: var(--green); }
+    .badge-blue  { background: rgba(0,207,255,.15); border: 1px solid var(--blue);  color: var(--blue); }
+
+    .bottom-row { display: grid; grid-template-columns: 1fr 1fr 300px; gap: 16px; }
+    @media(max-width:1100px) { .bottom-row{grid-template-columns:1fr 1fr} }
+    @media(max-width:700px)  { .bottom-row{grid-template-columns:1fr} }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; padding: 11px 16px; border-bottom: 1px solid var(--border); }
+    .card-title  { font-size: 10px; font-family: 'JetBrains Mono', monospace; letter-spacing: 2px; text-transform: uppercase; }
+    .card-title.green { color: var(--green); }
+    .card-title.blue  { color: var(--blue); }
+    .card-body { padding: 12px 16px; }
+
+    .det-list { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+    .det-list::-webkit-scrollbar { width: 3px; }
+    .det-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* Combined summary block */
+    .det-summary { border-radius: 8px; padding: 11px 14px; }
+    .det-summary.green { background: rgba(0,255,136,.06); border: 1px solid rgba(0,255,136,.2); }
+    .det-summary.blue  { background: rgba(0,207,255,.06); border: 1px solid rgba(0,207,255,.2); }
+    .det-summary-header { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 7px; }
+    .det-row { display: flex; gap: 6px; align-items: baseline; margin-bottom: 3px; font-size: 13px; }
+    .det-row-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); min-width: 64px; }
+    .det-row-val { font-weight: 700; color: #fff; }
+    .det-row-val.green { color: var(--green); }
+    .det-row-val.blue  { color: var(--blue); }
+
+    /* Individual items */
+    .det-item { border-radius: 8px; padding: 9px 12px; animation: slideIn .2s ease; }
+    .det-item.green { background: rgba(0,255,136,.03); border: 1px solid rgba(0,255,136,.1); }
+    .det-item.blue  { background: rgba(0,207,255,.03); border: 1px solid rgba(0,207,255,.1); }
+    @keyframes slideIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+    .det-top { display: flex; justify-content: space-between; align-items: center; }
+    .det-category { font-size: 9px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .det-conf { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; }
+    .det-conf.green { color: var(--green); }
+    .det-conf.blue  { color: var(--blue); }
+    .det-content-text { font-size: 14px; font-weight: 700; color: #fff; margin-top: 2px; }
+    .det-decoded { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--warn); margin-top: 3px; word-break: break-all; }
+
+    .divider { height: 1px; background: var(--border); margin: 6px 0; }
+    .empty { text-align: center; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 30px 0; }
+
+    .btn-row { display: flex; gap: 8px; }
+    .btn { flex:1; padding: 8px 0; border-radius: 7px; border: none; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; transition: all .15s; }
+    .btn-primary { background: var(--green); color: #000; }
+    .btn-primary:hover { opacity: .85; }
+    .btn-danger  { background: transparent; border: 1px solid var(--red); color: var(--red); }
+    .btn-danger:hover { background: rgba(255,77,109,.1); }
+
+    .log-entry { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 2; border-bottom: 1px solid rgba(26,45,66,.5); }
+    .log-entry:last-child { border-bottom: none; }
+
+    footer { text-align: center; padding: 8px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--muted); border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">YS</div>
+    <div class="logo-text">YOLO <span>Scanner</span></div>
+  </div>
+  <div class="header-right">
+    <div class="stopwatch-wrap">
+      <span class="sw-label">Run</span>
+      <div class="sw-display" id="sw-display">00:00</div>
+      <button class="sw-btn sw-start" id="sw-btn" onclick="swToggle()">START</button>
+      <button class="sw-btn sw-reset" onclick="swReset()">RESET</button>
+    </div>
+    <div class="status-pill"><div class="dot"></div>LIVE · 2 CAM</div>
+  </div>
+</header>
+
+<main>
+
+  <div class="stats-strip">
+    <div class="stat"><div class="stat-label">Cam 1 Objects</div><div class="stat-val" id="s1-count" style="color:var(--green)">0</div></div>
+    <div class="stat"><div class="stat-label">Cam 2 Objects</div><div class="stat-val" id="s2-count" style="color:var(--blue)">0</div></div>
+    <div class="stat"><div class="stat-label">Total Logged</div><div class="stat-val" id="s-total" style="color:var(--warn)">0</div></div>
+    <div class="stat"><div class="stat-label">Run Time</div><div class="stat-val" id="s-runtime" style="font-size:16px;padding-top:3px;color:var(--orange)">00:00</div></div>
+    <div class="stat"><div class="stat-label">Clock</div><div class="stat-val" id="clock" style="font-size:13px;padding-top:5px;color:var(--text)">—</div></div>
+  </div>
+
+  <div class="cameras-row">
+    <div class="cam-panel">
+      <div class="cam-label green">📷 Camera 1 — /dev/video0</div>
+      <div class="video-wrap green-border">
+        <img src="/video_feed/0" alt="Camera 1"/>
+        <div class="cam-badge">
+          <span class="badge badge-live">● REC</span>
+          <span class="badge badge-green">CAM 1</span>
+        </div>
+      </div>
+    </div>
+    <div class="cam-panel">
+      <div class="cam-label blue">📷 Camera 2 — /dev/video2</div>
+      <div class="video-wrap blue-border">
+        <img src="/video_feed/1" alt="Camera 2"/>
+        <div class="cam-badge">
+          <span class="badge badge-live">● REC</span>
+          <span class="badge badge-blue">CAM 2</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title green">Camera 1 — Output</span>
+        <span id="c1-badge" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)">0 objects</span>
+      </div>
+      <div class="card-body">
+        <div class="det-list" id="list-0"><div class="empty">No detections…</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title blue">Camera 2 — Output</span>
+        <span id="c2-badge" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)">0 objects</span>
+      </div>
+      <div class="card-body">
+        <div class="det-list" id="list-1"><div class="empty">No detections…</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title" style="color:var(--text)">Data Export</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
+        <p style="font-size:11px;color:var(--muted);line-height:1.6">Logs timestamp, run time, camera, category, content & confidence.</p>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="downloadCSV()">⬇ CSV</button>
+          <button class="btn btn-danger"  onclick="clearCSV()">✕ Clear</button>
+        </div>
+        <div id="csv-msg" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--green);text-align:center;min-height:14px"></div>
+        <div style="border-top:1px solid var(--border);padding-top:10px">
+          <div style="font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--muted);margin-bottom:6px;letter-spacing:1.5px">DETECTION LOG</div>
+          <div id="log" style="max-height:150px;overflow-y:auto;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>YOLO Scanner · Raspberry Pi 5 · Dual Camera · <span id="footer-clock"></span></footer>
+
+<script>
+  // CLASS MAP (mirrors Python CLASS_MAP)
+  const CLASS_MAP = {
+    0:  ["Face recognition",      "Roger Federer"],
+    1:  ["Face recognition",      "Keanu Reeves"],
+    2:  ["Face recognition",      "Henry Cavill"],
+    3:  ["Parcel",                "Parcel"],
+    4:  ["QR code",               null],
+    5:  ["Smart switch",          "Smart Console"],
+    6:  ["Furniture",             "Chair"],
+    7:  ["Furniture",             "Dining Table"],
+    8:  ["Pets",                  "Cat"],
+    9:  ["Pets",                  "Dog"],
+    10: ["Vehicle",               "Bicycle"],
+    11: ["Vehicle",               "Car"],
+    12: ["Vehicle",               "Motorbike"],
+    13: ["Brand logo",            "Apple"],
+    14: ["Brand logo",            "Tesla"],
+    15: ["Brand logo",            "Maybach"],
+    16: ["Brand logo",            "Keus"],
+    17: ["Vehicle number plate",  null],
+  };
+
+  function getCategory(cls_id) {
+    return CLASS_MAP[cls_id] ? CLASS_MAP[cls_id][0] : "Unknown";
+  }
+  function getContent(det) {
+    const entry = CLASS_MAP[det.class_id];
+    if (!entry) return det.class_name;
+    if (entry[1]) return entry[1];           // fixed name
+    return det.decoded || det.class_name;    // dynamic (QR / plate)
+  }
+
+  // ── STOPWATCH ──
+  let swSec = 0, swRunning = false, swTimer = null;
+
+  function swToggle() {
+    if (swRunning) {
+      clearInterval(swTimer); swRunning = false;
+      document.getElementById("sw-btn").textContent = "RESUME";
+      document.getElementById("sw-btn").className = "sw-btn sw-start";
+      document.getElementById("sw-display").className = "sw-display";
+    } else {
+      swTimer = setInterval(() => { swSec++; _swRefresh(); syncRunTime(); }, 1000);
+      swRunning = true;
+      document.getElementById("sw-btn").textContent = "PAUSE";
+      document.getElementById("sw-btn").className = "sw-btn sw-pause";
+      document.getElementById("sw-display").className = "sw-display running";
+    }
+  }
+  function swReset() {
+    clearInterval(swTimer); swRunning = false; swSec = 0; _swRefresh();
+    document.getElementById("sw-btn").textContent = "START";
+    document.getElementById("sw-btn").className = "sw-btn sw-start";
+    document.getElementById("sw-display").className = "sw-display";
+    syncRunTime();
+  }
+  function syncRunTime() {
+    fetch("/set_run_time", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({run_time: swFmt(swSec)})}).catch(()=>{});
+  }
+  function _swRefresh() {
+    const f = swFmt(swSec);
+    document.getElementById("sw-display").textContent = f;
+    document.getElementById("s-runtime").textContent = f;
+  }
+  function swFmt(s) {
+    return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+  }
+  function getRunTime() { return swFmt(swSec); }
+
+  // ── CLOCK ──
+  function tick() {
+    const t = new Date().toLocaleTimeString();
+    document.getElementById("clock").textContent = t;
+    document.getElementById("footer-clock").textContent = t;
+  }
+  tick(); setInterval(tick, 1000);
+
+  // ── RENDER DETECTIONS ──
+  function renderList(listId, data, colorClass) {
+    const el = document.getElementById(listId);
+    if (!data.length) { el.innerHTML = '<div class="empty">No detections…</div>'; return; }
+
+    // Build grouped categories and contents
+    const catMap = {};
+    data.forEach(d => {
+      const cat     = getCategory(d.class_id);
+      const content = getContent(d);
+      if (!catMap[cat]) catMap[cat] = new Set();
+      catMap[cat].add(content);
+    });
+    const allCats     = Object.keys(catMap);
+    const allContents = allCats.flatMap(c => [...catMap[c]]);
+
+    let html = "";
+
+    // Combined summary (challenge output format)
+    html += `<div class="det-summary ${colorClass}">
+      <div class="det-summary-header">Output</div>
+      <div class="det-row">
+        <span class="det-row-label">Category:</span>
+        <span class="det-row-val ${colorClass}">${allCats.join(", ")}</span>
+      </div>
+      <div class="det-row">
+        <span class="det-row-label">Content:</span>
+        <span class="det-row-val ${colorClass}">${allContents.join(", ")}</span>
+      </div>
+    </div>`;
+
+    if (data.length > 1) {
+      html += `<div class="divider"></div>`;
+    }
+
+    // Per-detection items
+    data.forEach(d => {
+      const cat     = getCategory(d.class_id);
+      const content = getContent(d);
+      const pct     = (d.confidence * 100).toFixed(1);
+      html += `<div class="det-item ${colorClass}">
+        <div class="det-top">
+          <span class="det-category">${cat}</span>
+          <span class="det-conf ${colorClass}">${pct}%</span>
+        </div>
+        <div class="det-content-text">${content}</div>
+        ${d.decoded ? `<div class="det-decoded">↳ ${d.decoded}</div>` : ""}
+      </div>`;
+    });
+
+    el.innerHTML = html;
+  }
+
+  // ── POLL ──
+  let total = 0;
+  const loggedKeys = new Map(); // key → timestamp to expire
+
+  async function poll() {
+    try {
+      const [d0, d1] = await Promise.all([
+        fetch("/detections/0").then(r => r.json()),
+        fetch("/detections/1").then(r => r.json()),
+      ]);
+
+      renderList("list-0", d0, "green");
+      renderList("list-1", d1, "blue");
+
+      document.getElementById("c1-badge").textContent = `${d0.length} object${d0.length!==1?"s":""}`;
+      document.getElementById("c2-badge").textContent = `${d1.length} object${d1.length!==1?"s":""}`;
+      document.getElementById("s1-count").textContent = d0.length;
+      document.getElementById("s2-count").textContent = d1.length;
+
+      const now = Date.now();
+      // Expire keys older than 12s
+      loggedKeys.forEach((ts, key) => { if (now - ts > 12000) loggedKeys.delete(key); });
+
+      const log = document.getElementById("log");
+      [
+        ...d0.map(d => ({...d, cam:"Camera 1", col:"#00ff88"})),
+        ...d1.map(d => ({...d, cam:"Camera 2", col:"#00cfff"}))
+      ].forEach(d => {
+        const key = `${d.cam}-${d.class_id}`;
+        if (loggedKeys.has(key)) return;
+        loggedKeys.set(key, now);
+        total++;
+        document.getElementById("s-total").textContent = total;
+        const cat     = getCategory(d.class_id);
+        const content = getContent(d);
+        const e = document.createElement("div");
+        e.className = "log-entry";
+        e.innerHTML =
+          `<span style="color:${d.col}">[${d.cam}]</span> ` +
+          `<span style="color:var(--muted)">${cat}</span> · ` +
+          `<span style="color:#fff;font-weight:600">${content}</span> ` +
+          `<span style="color:var(--warn)">${(d.confidence*100).toFixed(1)}%</span> ` +
+          `<span style="color:var(--muted);font-size:9px">[${getRunTime()}]</span>`;
+        log.prepend(e);
+        if (log.children.length > 100) log.removeChild(log.lastChild);
+      });
+
+    } catch(e) {}
+    setTimeout(poll, 800);
+  }
+  poll();
+
+  function downloadCSV() { const a=document.createElement("a"); a.href="/download_csv"; a.click(); msg("✔ Downloading…"); }
+  async function clearCSV() {
+    if (!confirm("Clear all detection logs?")) return;
+    await fetch("/clear_csv", {method:"POST"});
+    total = 0;
+    document.getElementById("s-total").textContent = "0";
+    document.getElementById("log").innerHTML = "";
+    loggedKeys.clear();
+    msg("✔ Cleared");
+  }
+  function msg(m) { const el=document.getElementById("csv-msg"); el.textContent=m; setTimeout(()=>el.textContent="",3000); }
+</script>
+</body>
+</html>
