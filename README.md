@@ -146,7 +146,7 @@ BotDesignChallenge/
 
 ### Behavior
 
-1. **Object avoidance (priority)** — When the object-detection sensor triggers, the bot reverses, turns left, moves forward, turns right, and re-aligns on the line.
+1. **Object avoidance (priority)** — When the object detection sensor triggers, the bot reverses, turns left, moves forward, turns right, and re-aligns on the line.
 2. **Intersection turns** — Far-left or far-right sensor LOW triggers a perpendicular turn until the center sensor re-acquires the line.
 3. **Line following** — Center-on-line drives forward; off-center patterns trigger slight or strong corrections.
 4. **All-sensors-white** — Bot stops (end of track / lost line).
